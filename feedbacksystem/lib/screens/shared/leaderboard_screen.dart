@@ -291,10 +291,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
           // Floating Dock
           FloatingDock(
-            activeIndex: widget.userRole == 'student' ? 1 : -1,
+            activeIndex: (widget.userRole == 'student' || widget.userRole == 'hod') ? 1 : -1,
             showUsers: widget.userRole != 'coordinator',
-            middleLabel: widget.userRole == 'student' ? 'Leaderboard' : 'Users',
-            middleIcon: widget.userRole == 'student' ? Icons.emoji_events_rounded : Icons.group_rounded,
+            middleLabel: (widget.userRole == 'student' || widget.userRole == 'hod') ? 'Leaderboard' : 'Users',
+            middleIcon: (widget.userRole == 'student' || widget.userRole == 'hod') ? Icons.leaderboard_rounded : Icons.group_rounded,
             onTabTapped: (index) {
               if (index == 0) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -324,7 +324,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                           token: widget.token,
                           userName: widget.userName,
                           userRole: widget.userRole,
-                          initialTab: 'Sections',
+                          initialTab: 'Dashboard',
                         );
                       } else {
                         return SuperadminDashboard(
@@ -338,7 +338,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   (route) => false,
                 );
               } else if (index == 1) {
-                if (widget.userRole != 'student') {
+                if (widget.userRole == 'superadmin' || widget.userRole == 'supreme') {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => UserManagementScreen(

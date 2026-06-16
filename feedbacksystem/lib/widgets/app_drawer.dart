@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../screens/superadmin/superadmin_dashboard.dart';
 import '../screens/supreme/supreme_dashboard.dart';
 import '../screens/superadmin/user_management_screen.dart';
@@ -36,6 +38,7 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer> {
   late String _activeDrawerItem;
   late String _activeSubItem;
+  String? _profilePicUrl;
   final Color primaryNavy = const Color(0xFF1A2744);
   final Color accentRed = const Color(0xFFE53935);
 
@@ -44,6 +47,30 @@ class _AppDrawerState extends State<AppDrawer> {
     super.initState();
     _activeDrawerItem = widget.activeDrawerItem;
     _activeSubItem = widget.activeSubItem;
+    _fetchProfilePic();
+  }
+
+  Future<void> _fetchProfilePic() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://invertis-feedback-system-0chx.onrender.com/api/auth/profile-data'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.token}',
+        },
+      );
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final user = data['user'] ?? {};
+        final pic = user['profile_pic'] ?? user['profile_pic_url'] ?? user['url'];
+        if (pic != null && pic.toString().isNotEmpty) {
+          setState(() {
+            _profilePicUrl = pic.toString();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   void _navigateToScreen(BuildContext context, Widget screen) {
@@ -86,8 +113,10 @@ class _AppDrawerState extends State<AppDrawer> {
                 CircleAvatar(
                   backgroundColor: Colors.red,
                   radius: 18,
-                  backgroundImage: widget.profileImage,
-                  child: widget.profileImage == null
+                  backgroundImage: _profilePicUrl != null 
+                      ? NetworkImage(_profilePicUrl!) 
+                      : widget.profileImage,
+                  child: (_profilePicUrl == null && widget.profileImage == null)
                       ? Text(
                           initial,
                           style: const TextStyle(
@@ -260,7 +289,7 @@ class _AppDrawerState extends State<AppDrawer> {
                   token: widget.token,
                   userName: widget.userName,
                   userRole: widget.userRole,
-                  initialTab: 'Sections',
+                  initialTab: 'Dashboard',
                 ),
               );
             } else {

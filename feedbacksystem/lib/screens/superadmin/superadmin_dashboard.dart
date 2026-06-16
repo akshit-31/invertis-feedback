@@ -174,21 +174,26 @@ class _SuperadminDashboardState extends State<SuperadminDashboard> {
           preferredSize: const Size.fromHeight(3),
           child: Container(height: 3, color: Colors.red),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16, top: 12, bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius: BorderRadius.circular(8),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Center(
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.white, size: 18),
+                    padding: EdgeInsets.zero,
+                    onPressed: _handleLogout,
+                  ),
+                ),
+              ),
             ),
-            child: IconButton(
-              icon: const Icon(Icons.logout, color: Colors.white, size: 16),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: _handleLogout,
-            ),
-          ),
-        ],
+          ],
       ),
       drawer: AppDrawer(
         token: widget.token,
