@@ -41,6 +41,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   String _selectedDepartment = 'All Departments';
   String _selectedInsightsFaculty = 'All Faculty';
+  String _selectedFacultyRankingId = 'all';
   String _selectedRole = 'All'; // All, Faculty, Trainer
 
   @override
@@ -1205,6 +1206,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       return _buildEmptyState('No faculty rankings found.');
     }
 
+    final uniqueFaculties = <String, String>{};
+    for (var f in facultyList) {
+      final id = f['id']?.toString() ?? f['name']?.toString() ?? 'unknown';
+      final name = f['name']?.toString() ?? 'Unknown';
+      uniqueFaculties[id] = name;
+    }
+
+    dynamic selectedTeacher;
+    if (_selectedFacultyRankingId != 'all') {
+      selectedTeacher = facultyList.firstWhere(
+        (f) => (f['id']?.toString() ?? f['name']?.toString() ?? 'unknown') == _selectedFacultyRankingId, 
+        orElse: () => null
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1221,16 +1237,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.trending_up, color: Color(0xFF1A2744)),
-              SizedBox(width: 8),
-              Text(
-                'Faculty Rankings (out of 10)',
-                style: TextStyle(
-                  color: Color(0xFF1A2744),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+              const Icon(Icons.trending_up, color: Color(0xFF1A2744)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _selectedFacultyRankingId == 'all' 
+                      ? 'Faculty Rankings (out of 10)'
+                      : 'Performance Breakdown: ${selectedTeacher?['name'] ?? 'Unknown'}',
+                  style: const TextStyle(
+                    color: Color(0xFF1A2744),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ],
@@ -1247,132 +1267,407 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    const Text(
-                      'All Faculty (Overview)',
-                      style: TextStyle(
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: _selectedFacultyRankingId,
+                      icon: Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey.shade600),
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF1A2744),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey.shade600),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Row(
-            children: [
-              Text(
-                '💡 ',
-                style: TextStyle(fontSize: 12),
-              ),
-              Expanded(
-                child: Text(
-                  'Click on any bar below to view that teacher\'s personal rating breakdown.',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          ...facultyList.asMap().entries.map((entry) {
-            final int i = entry.key;
-            final f = entry.value;
-            final name = f['name']?.toString() ?? 'Unknown';
-            final rating = double.tryParse(f['avg_rating']?.toString() ?? '0') ?? 0.0;
-            final percentage = rating / 10.0;
-            
-            // Generate a color based on index to match web app pattern
-            final colors = [
-              const Color(0xFF0F2D52), // Darkest Navy
-              const Color(0xFF1D4E89), // Dark Navy
-              const Color(0xFF3B6EA5), // Mid Blue
-              const Color(0xFF10B981), // Emerald
-              const Color(0xFFF59E0B), // Amber
-              const Color(0xFFC62828), // Red
-            ];
-            Color barColor = colors[i % colors.length];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      name,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF455A64),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 6,
-                    child: Row(
-                      children: [
-                        Flexible(
-                          flex: (percentage * 100).toInt(),
-                          child: Container(
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: barColor,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedFacultyRankingId = newValue;
+                          });
+                        }
+                      },
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: 'all',
+                          child: Text('All Faculty (Overview)'),
                         ),
-                        Flexible(
-                          flex: 100 - (percentage * 100).toInt(),
-                          child: Container(),
-                        ),
+                        ...uniqueFaculties.entries.map((e) => DropdownMenuItem<String>(
+                          value: e.key,
+                          child: Text(e.value),
+                        )),
                       ],
                     ),
                   ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 12),
-          // X-Axis
-          Row(
-            children: [
-              Expanded(
-                flex: 4,
-                child: Container(),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 6,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('0', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
-                    Text('3', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
-                    Text('6', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
-                    Text('10', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ],
                 ),
               ),
+              if (_selectedFacultyRankingId != 'all') ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => setState(() => _selectedFacultyRankingId = 'all'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B6EA5).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF3B6EA5).withOpacity(0.2)),
+                    ),
+                    child: const Text('View All', style: TextStyle(color: Color(0xFF3B6EA5), fontSize: 11, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          if (_selectedFacultyRankingId == 'all') ...[
+            const Row(
+              children: [
+                Text(
+                  '💡 ',
+                  style: TextStyle(fontSize: 12),
+                ),
+                Expanded(
+                  child: Text(
+                    'Click on any bar below to view that teacher\'s personal rating breakdown.',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            ...facultyList.asMap().entries.map((entry) {
+              final int i = entry.key;
+              final f = entry.value;
+              final name = f['name']?.toString() ?? 'Unknown';
+              final id = f['id']?.toString() ?? f['name']?.toString() ?? 'unknown';
+              final rating = double.tryParse(f['avg_rating']?.toString() ?? '0') ?? 0.0;
+              final percentage = rating / 10.0;
+              
+              // Generate a color based on index to match web app pattern
+              final colors = [
+                const Color(0xFF0F2D52), // Darkest Navy
+                const Color(0xFF1D4E89), // Dark Navy
+                const Color(0xFF3B6EA5), // Mid Blue
+                const Color(0xFF10B981), // Emerald
+                const Color(0xFFF59E0B), // Amber
+                const Color(0xFFC62828), // Red
+              ];
+              Color barColor = colors[i % colors.length];
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedFacultyRankingId = id;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          name,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            color: Color(0xFF455A64),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 6,
+                        child: Row(
+                          children: [
+                            Flexible(
+                              flex: (percentage * 100).toInt(),
+                              child: Container(
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: barColor,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                            ),
+                            Flexible(
+                              flex: 100 - (percentage * 100).toInt(),
+                              child: Container(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+            // X-Axis
+            Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Container(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 6,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('0', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('3', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('6', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('10', style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ] else if (selectedTeacher != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('ATTRIBUTE PERFORMANCE', style: TextStyle(color: Color(0xFF607D8B), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2)),
+                  const SizedBox(height: 24),
+                  Column(
+                    children: [
+                      // Graph Area
+                      SizedBox(
+                        height: 180,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 0,
+                                    child: Transform.translate(
+                                      offset: const Offset(0, 6),
+                                      child: const Text('0', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 180 * 0.3,
+                                    right: 0,
+                                    child: Transform.translate(
+                                      offset: const Offset(0, 6),
+                                      child: const Text('3', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 180 * 0.6,
+                                    right: 0,
+                                    child: Transform.translate(
+                                      offset: const Offset(0, 6),
+                                      child: const Text('6', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 180 * 0.9,
+                                    right: 0,
+                                    child: Transform.translate(
+                                      offset: const Offset(0, 6),
+                                      child: const Text('9', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 180,
+                                    right: 0,
+                                    child: Transform.translate(
+                                      offset: const Offset(0, 6),
+                                      child: const Text('10', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: (() {
+                                  List<dynamic> attributes = selectedTeacher['attributes'] ?? [];
+                                  return attributes.asMap().entries.map<Widget>((entry) {
+                                    final idx = entry.key;
+                                    final attr = entry.value;
+                                    final rating = double.tryParse(attr['avg_rating']?.toString() ?? '0') ?? 0.0;
+                                    final percentage = rating / 10.0;
+                                    final colors = [
+                                      const Color(0xFF002855), // Darkest Navy
+                                      const Color(0xFF00509E), // Mid Blue
+                                      const Color(0xFF1E70A4), // Light Blue
+                                      const Color(0xFF00C896), // Emerald
+                                      const Color(0xFFFCA311), // Amber
+                                    ];
+                                    Color barColor = colors[idx % colors.length];
+
+                                    return AnimatedContainer(
+                                      duration: const Duration(milliseconds: 600),
+                                      curve: Curves.easeOutCubic,
+                                      width: 42,
+                                      height: 180 * percentage,
+                                      decoration: BoxDecoration(
+                                        color: barColor,
+                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                      ),
+                                    );
+                                  }).toList();
+                                })(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // X-Axis Labels
+                      Row(
+                        children: [
+                          const SizedBox(width: 30), // width 14 + spacing 16
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: (() {
+                                List<dynamic> attributes = selectedTeacher['attributes'] ?? [];
+                                return attributes.asMap().entries.map<Widget>((entry) {
+                                  return SizedBox(
+                                    width: 42,
+                                    child: Center(
+                                      child: Text('Q${entry.key + 1}', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                                    ),
+                                  );
+                                }).toList();
+                              })(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            const Text('DETAILS', style: TextStyle(color: Color(0xFF607D8B), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2)),
+            const SizedBox(height: 16),
+            ...(() {
+              List<dynamic> attributes = selectedTeacher['attributes'] ?? [];
+              if (attributes.isEmpty) {
+                return <Widget>[const Text('No question breakdown available for this teacher.')];
+              }
+              return attributes.asMap().entries.map<Widget>((entry) {
+                final idx = entry.key;
+                final attr = entry.value;
+                final rating = double.tryParse(attr['avg_rating']?.toString() ?? '0') ?? 0.0;
+                final question = attr['question_text']?.toString() ?? 'Q${idx + 1}';
+                final percentage = rating / 10.0;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              'Q${idx + 1}',
+                              style: const TextStyle(
+                                color: Color(0xFF475569),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${rating.toStringAsFixed(0)} / 10',
+                            style: const TextStyle(
+                              color: Color(0xFFEF4444),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        question,
+                        style: const TextStyle(
+                          color: Color(0xFF1E293B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        height: 6,
+                        width: double.infinity,
+                        alignment: Alignment.centerLeft,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 600),
+                              curve: Curves.easeOutCubic,
+                              width: constraints.maxWidth * percentage,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEF4444),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList();
+            })(),
+            const SizedBox(height: 12),
+          ],
         ],
       ),
     );

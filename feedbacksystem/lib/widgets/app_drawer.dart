@@ -89,11 +89,29 @@ class _AppDrawerState extends State<AppDrawer> {
     Navigator.of(context).push(MaterialPageRoute(builder: (context) => screen));
   }
 
+  ImageProvider<Object>? _getProfileImage() {
+    if (_profilePicUrl != null && _profilePicUrl!.isNotEmpty) {
+      if (_profilePicUrl!.startsWith('data:image')) {
+        try {
+          final base64String = _profilePicUrl!.split(',').last;
+          return MemoryImage(base64Decode(base64String));
+        } catch (e) {
+          return widget.profileImage;
+        }
+      } else if (_profilePicUrl!.startsWith('http')) {
+        return NetworkImage(_profilePicUrl!);
+      }
+    }
+    return widget.profileImage;
+  }
+
   @override
   Widget build(BuildContext context) {
     final String initial = widget.userName.isNotEmpty
         ? widget.userName[0].toUpperCase()
         : 'S';
+
+    final ImageProvider<Object>? currentProfileImage = _getProfileImage();
 
     return Drawer(
       backgroundColor: Colors.white,
@@ -113,10 +131,8 @@ class _AppDrawerState extends State<AppDrawer> {
                 CircleAvatar(
                   backgroundColor: Colors.red,
                   radius: 18,
-                  backgroundImage: _profilePicUrl != null 
-                      ? NetworkImage(_profilePicUrl!) 
-                      : widget.profileImage,
-                  child: (_profilePicUrl == null && widget.profileImage == null)
+                  backgroundImage: currentProfileImage,
+                  child: currentProfileImage == null
                       ? Text(
                           initial,
                           style: const TextStyle(
