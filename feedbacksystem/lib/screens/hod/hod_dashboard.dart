@@ -49,6 +49,10 @@ class _HodDashboardState extends State<HodDashboard> {
   bool _isLoadingSections = false;
   List<dynamic> _sections = [];
 
+  // My Forms State
+  bool _isLoadingMyForms = false;
+  List<dynamic> _myForms = [];
+
   // Create Form State
   String? _selectedSectionId;
   String? _selectedFacultyCourseId;
@@ -80,6 +84,7 @@ class _HodDashboardState extends State<HodDashboard> {
     _fetchStats();
     _fetchSections();
     _fetchPortalStatus();
+    _fetchMyForms();
   }
 
   Future<void> _fetchProfileData() async {
@@ -105,6 +110,22 @@ class _HodDashboardState extends State<HodDashboard> {
       }
     } catch (_) {}
     if (mounted) setState(() => _isLoadingSections = false);
+  }
+
+  Future<void> _fetchMyForms() async {
+    setState(() => _isLoadingMyForms = true);
+    try {
+      final res = await http.get(Uri.parse('$_apiBase/hod/tlfq'), headers: _headers);
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            _myForms = decoded is List ? decoded : (decoded['forms'] ?? decoded['data'] ?? []);
+          });
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoadingMyForms = false);
   }
 
   Future<void> _fetchStats() async {
@@ -233,8 +254,9 @@ class _HodDashboardState extends State<HodDashboard> {
       if (res.statusCode == 200 || res.statusCode == 201) {
         _showSnackBar('Form created successfully!', Colors.green);
         setState(() {
-          _currentTab = 'Dashboard';
+          _currentTab = 'My Forms';
           _fetchStats(); // Refresh stats
+          _fetchMyForms(); // Refresh forms
         });
       } else {
         _showSnackBar('Failed to create form', Colors.red);
@@ -465,48 +487,53 @@ class _HodDashboardState extends State<HodDashboard> {
         color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(24),
       ),
-      child: Row(
-        children: [
-          _buildTabItem('Dashboard', Icons.dashboard_customize),
-          _buildTabItem('Sections', Icons.link),
-          _buildTabItem('Create Form', Icons.add),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildTabItem('Dashboard', Icons.dashboard_customize),
+            _buildTabItem('Sections', Icons.link),
+            _buildTabItem('Create Form', Icons.add),
+            _buildTabItem('My Forms', Icons.description),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildTabItem(String title, IconData icon) {
     final isSelected = _currentTab == title;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _currentTab = title);
-          if (title == 'Sections') {
-            _fetchSections();
-          }
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? themeColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.blueGrey.shade600),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.blueGrey.shade700,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  fontSize: 12,
-                ),
+    return GestureDetector(
+      onTap: () {
+        setState(() => _currentTab = title);
+        if (title == 'Sections') {
+          _fetchSections();
+        } else if (title == 'My Forms') {
+          _fetchMyForms();
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? themeColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.blueGrey.shade600),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.blueGrey.shade700,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                fontSize: 12,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -874,6 +901,109 @@ class _HodDashboardState extends State<HodDashboard> {
     );
   }
 
+  Widget _buildMyFormsContent() {
+    if (_isLoadingMyForms) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_myForms.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: Text('No forms found.')),
+      );
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _myForms.length,
+      itemBuilder: (context, index) {
+        final form = _myForms[index];
+        final title = form['title'] ?? 'Untitled Form';
+        final sectionName = form['section_name'] ?? form['section'] ?? 'Unknown Section';
+        final facultyName = form['faculty_name'] ?? form['faculty'] ?? 'Unknown Faculty';
+        final courseName = form['course_name'] ?? form['course'] ?? 'Unknown Course';
+        final closingTimeStr = form['closing_time'] ?? '';
+        final responseCount = form['response_count'] ?? form['responses_count'] ?? form['responses'] ?? 0;
+        
+        DateTime? closingTime;
+        if (closingTimeStr.isNotEmpty) {
+          try {
+            closingTime = DateTime.parse(closingTimeStr);
+          } catch (_) {}
+        }
+        
+        final isExpired = closingTime != null && closingTime.isBefore(DateTime.now());
+        
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isExpired ? Colors.blueGrey.shade400 : Colors.green.shade400,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      isExpired ? 'expired' : 'open',
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('$responseCount responses', style: TextStyle(color: Colors.blueGrey.shade500, fontSize: 10)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: primaryNavy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$sectionName • $facultyName • $courseName',
+                style: TextStyle(color: Colors.blueGrey.shade600, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 12, color: Colors.blueGrey.shade500),
+                  const SizedBox(width: 4),
+                  Text(
+                    closingTime != null 
+                        ? 'Closes: ${closingTime.month}/${closingTime.day}/${closingTime.year}, ${closingTime.hour > 12 ? closingTime.hour - 12 : (closingTime.hour == 0 ? 12 : closingTime.hour)}:${closingTime.minute.toString().padLeft(2, '0')}:${closingTime.second.toString().padLeft(2, '0')} ${closingTime.hour >= 12 ? 'PM' : 'AM'}' 
+                        : 'No closing time',
+                    style: TextStyle(color: Colors.blueGrey.shade500, fontSize: 10),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -974,9 +1104,11 @@ class _HodDashboardState extends State<HodDashboard> {
                         ? _buildDashboardContent()
                         : _currentTab == 'Sections'
                           ? _buildSectionsContent()
-                          : SingleChildScrollView(
-                              child: _buildCreateFormContent(),
-                            ),
+                          : _currentTab == 'My Forms'
+                            ? SingleChildScrollView(child: _buildMyFormsContent())
+                            : SingleChildScrollView(
+                                child: _buildCreateFormContent(),
+                              ),
                   ),
                 ),
               ],

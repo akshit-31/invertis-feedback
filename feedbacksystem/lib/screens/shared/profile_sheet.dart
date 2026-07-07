@@ -540,7 +540,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
                             _infoRow(
                               Icons.apartment_rounded,
                               'DEPARTMENT',
-                              '—',
+                              _userData['department'] ?? _stats['department'] ?? '—',
                             ),
                             const Divider(height: 1),
                             _statusRow(
