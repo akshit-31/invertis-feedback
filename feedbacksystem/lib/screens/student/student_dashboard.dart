@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../widgets/app_drawer.dart';
@@ -6,6 +7,7 @@ import '../auth/login_screen.dart';
 import '../../widgets/floating_dock.dart';
 import '../shared/profile_sheet.dart';
 import '../shared/leaderboard_screen.dart';
+import 'feedback_form_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
   final String token;
@@ -35,15 +37,28 @@ class _StudentDashboardState extends State<StudentDashboard> {
   bool _isLoading = true;
   List<dynamic> _activeForms = [];
   Map<String, dynamic> _userData = {};
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchDashboardData();
+    // Real-time polling every 10 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted) {
+        _fetchDashboardData(silent: true);
+      }
+    });
   }
 
-  Future<void> _fetchDashboardData() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchDashboardData({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     try {
       // Fetch Profile Data
       final profileRes = await http.get(
@@ -62,7 +77,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
       }
 
       final response = await http.get(
-        Uri.parse('$_apiBase/student/dashboard'),
+        Uri.parse('$_apiBase/student/courses'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${widget.token}',
@@ -71,21 +86,43 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        
+        int pending = 0;
+        int completed = 0;
+        List<dynamic> allForms = [];
+        
+        if (data is List) {
+          for (var course in data) {
+            pending += (course['pending_count'] ?? 0) as int;
+            completed += (course['completed_count'] ?? 0) as int;
+            
+            final tlfqs = course['tlfqs'];
+            if (tlfqs is List) {
+              allForms.addAll(tlfqs);
+            }
+          }
+        }
+        
         if (mounted) {
           setState(() {
-            _pendingForms = data['pending'] ?? 0;
-            _completedForms = data['completed'] ?? 0;
-            _progressPercent = data['progress'] ?? 0;
-            _activeForms = data['forms'] ?? [];
+            _pendingForms = pending;
+            _completedForms = completed;
+            int total = pending + completed;
+            _progressPercent = total > 0 ? ((completed / total) * 100).round() : 0;
+            _activeForms = allForms;
             _isLoading = false;
           });
         }
       } else {
+        print('--- API DASHBOARD ERROR: ${response.statusCode} ---');
+        print(response.body);
         if (mounted) {
           setState(() => _isLoading = false);
         }
       }
     } catch (e) {
+      print('--- API DASHBOARD EXCEPTION ---');
+      print(e);
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -149,20 +186,28 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 _buildTopBar(primaryNavy, initial),
                 const Divider(height: 1, thickness: 2, color: Colors.red),
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(),
-                          const SizedBox(height: 20),
-                          _buildStatsCards(),
-                          const SizedBox(height: 24),
-                          _buildFormsSection(),
-                          const SizedBox(height: 40),
-                          _buildFooter(),
-                        ],
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      await _fetchDashboardData(silent: false);
+                    },
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildHeader(),
+                            const SizedBox(height: 20),
+                            _buildStatsCards(),
+                            const SizedBox(height: 24),
+                            _buildProgressSection(),
+                            const SizedBox(height: 16),
+                            _buildFormsSection(),
+                            const SizedBox(height: 40),
+                            _buildFooter(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -273,7 +318,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
               width: 8,
               height: 8,
               decoration: const BoxDecoration(
-                color: Colors.greenAccent,
+                color: Color(0xFF10B981),
                 shape: BoxShape.circle,
               ),
             ),
@@ -281,9 +326,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
             const Text(
               'STUDENT DASHBOARD',
               style: TextStyle(
-                color: Colors.greenAccent,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+                color: Color(0xFF10B981),
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
                 letterSpacing: 1.2,
               ),
             ),
@@ -294,16 +339,16 @@ class _StudentDashboardState extends State<StudentDashboard> {
           'Hey, ${widget.userName} 👋',
           style: const TextStyle(
             fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1E293B),
           ),
         ),
         const SizedBox(height: 4),
         const Text(
           "Your section's feedback forms for this semester.",
           style: TextStyle(
-            fontSize: 14,
-            color: Colors.black54,
+            fontSize: 13,
+            color: Color(0xFF475569),
           ),
         ),
       ],
@@ -313,11 +358,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
   Widget _buildStatsCards() {
     return Column(
       children: [
-        _buildStatCard('PENDING', _pendingForms.toString(), Colors.orange, Icons.access_time),
+        _buildStatCard('PENDING', _pendingForms.toString(), Colors.orange.shade700, Icons.access_time),
         const SizedBox(height: 12),
-        _buildStatCard('COMPLETED', _completedForms.toString(), Colors.green, Icons.check_circle_outline),
+        _buildStatCard('COMPLETED', _completedForms.toString(), const Color(0xFF10B981), Icons.check_circle_outline),
         const SizedBox(height: 12),
-        _buildStatCard('PROGRESS', '$_progressPercent%', Colors.blue, Icons.trending_up),
+        _buildStatCard('PROGRESS', '$_progressPercent%', Colors.blue.shade700, Icons.trending_up),
       ],
     );
   }
@@ -326,13 +371,13 @@ class _StudentDashboardState extends State<StudentDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -341,15 +386,22 @@ class _StudentDashboardState extends State<StudentDashboard> {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 20),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 16),
+              ),
               const SizedBox(width: 12),
               Text(
                 title,
                 style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: Colors.black54,
-                  letterSpacing: 1.0,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  color: Color(0xFF64748B),
+                  letterSpacing: 0.5,
                 ),
               ),
             ],
@@ -357,13 +409,70 @@ class _StudentDashboardState extends State<StudentDashboard> {
           Text(
             value,
             style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
               color: color,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProgressSection() {
+    int totalForms = _pendingForms + _completedForms;
+    if (totalForms == 0 && _activeForms.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Overall Feedback Completion',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Color(0xFF475569),
+              ),
+            ),
+            Text(
+              '$_completedForms of $totalForms forms completed',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 4,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final double percent = totalForms == 0 ? 0 : (_completedForms / totalForms);
+              return Stack(
+                children: [
+                  Container(
+                    width: constraints.maxWidth * percent,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xFF0F766E),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -404,25 +513,214 @@ class _StudentDashboardState extends State<StudentDashboard> {
       );
     }
 
+    // Since the backend already groups by course and we flattened them,
+    // let's group them back using course_code/name or subject_code.
+    Map<String, List<dynamic>> groupedForms = {};
+    for (var form in _activeForms) {
+      final code = form['course']?['code']?.toString() ?? form['subject_code']?.toString() ?? 'CS201';
+      if (!groupedForms.containsKey(code)) {
+        groupedForms[code] = [];
+      }
+      groupedForms[code]!.add(form);
+    }
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: _activeForms.length,
+      itemCount: groupedForms.keys.length,
       itemBuilder: (context, index) {
-        final form = _activeForms[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            title: Text(form['title'] ?? 'Feedback Form'),
-            subtitle: Text(form['status'] ?? 'Open'),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              // TODO: Navigate to form submission
-            },
-          ),
-        );
+        String code = groupedForms.keys.elementAt(index);
+        return _buildSubjectCard(code, groupedForms[code]!);
       },
     );
+  }
+
+  Widget _buildSubjectCard(String subjectCode, List<dynamic> forms) {
+    // Try to get title from nested course object or fallback
+    final String title = forms.isNotEmpty 
+        ? (forms.first['course']?['name']?.toString() ?? forms.first['subject_name']?.toString() ?? 'Data Structures') 
+        : 'Subject';
+    
+    int pendingCount = forms.where((f) => f['completed'] != true).length;
+    int completedCount = forms.where((f) => f['completed'] == true).length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  subjectCode,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.access_time, size: 12, color: Color(0xFF475569)),
+                      const SizedBox(width: 4),
+                      Text('$pendingCount', style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 12, color: Color(0xFF475569)),
+                      const SizedBox(width: 4),
+                      Text('$completedCount', style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...forms.map((form) => _buildFacultyRow(form)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFacultyRow(Map<String, dynamic> form) {
+    final String faculty = form['faculty_name']?.toString() ?? 'Faculty Name';
+    final String type = form['title']?.toString() ?? 'Evaluation';
+    final bool isCompleted = form['completed'] == true;
+
+    if (isCompleted) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  faculty,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  type,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+            const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 18),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FeedbackFormScreen(
+                    tlfqId: form['id'].toString(),
+                    token: widget.token,
+                    userName: widget.userName,
+                    userRole: widget.userRole,
+                  ),
+                ),
+              );
+              // If form was submitted successfully, refresh dashboard data
+              if (result == true) {
+                _fetchDashboardData(silent: false);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        faculty,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        type,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF94A3B8)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildFooter() {
