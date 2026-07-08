@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../widgets/app_drawer.dart';
 import '../auth/login_screen.dart';
 
@@ -33,7 +34,12 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
   List<dynamic> _questions = [];
   Map<String, int> _answers = {};
   String _comment = '';
+  
   final FlutterTts _flutterTts = FlutterTts();
+  final stt.SpeechToText _speechToText = stt.SpeechToText();
+  final TextEditingController _commentController = TextEditingController();
+  bool _isListening = false;
+  String _previousText = '';
 
   @override
   void initState() {
@@ -126,6 +132,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
     setState(() {
       _answers.clear();
       _comment = '';
+      _commentController.clear();
     });
   }
 
@@ -134,6 +141,48 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
     await _flutterTts.setSpeechRate(0.5);
     await _flutterTts.setPitch(1.0);
     await _flutterTts.speak(text);
+  }
+
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _speechToText.initialize(
+        onStatus: (val) {
+          if (val == 'done' || val == 'notListening') {
+            if (mounted) setState(() => _isListening = false);
+          }
+        },
+        onError: (val) {
+          if (mounted) {
+            setState(() => _isListening = false);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Speech recognition error.')));
+          }
+        },
+      );
+      if (available) {
+        _previousText = _commentController.text;
+        setState(() => _isListening = true);
+        _speechToText.listen(
+          onResult: (val) {
+            if (mounted) {
+              setState(() {
+                String newText = _previousText;
+                if (newText.isNotEmpty && !newText.endsWith(' ')) newText += ' ';
+                newText += val.recognizedWords;
+                _commentController.text = newText;
+                _comment = newText;
+              });
+            }
+          },
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Speech recognition denied or not available.')));
+        }
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speechToText.stop();
+    }
   }
 
   @override
@@ -218,8 +267,8 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.menu, color: Colors.black87),
+                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -233,20 +282,6 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
           ),
           Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  initial,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-              const SizedBox(width: 8),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.red,
@@ -664,29 +699,25 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
                 ],
               ),
               GestureDetector(
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Voice dictation coming soon!')),
-                  );
-                },
+                onTap: _listen,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: _isListening ? const Color(0xFFE2E8F0) : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: _isListening ? const Color(0xFF0F766E) : const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
-                    children: const [
-                      Icon(Icons.mic_none, size: 12, color: Color(0xFF64748B)),
-                      SizedBox(width: 6),
+                    children: [
+                      Icon(_isListening ? Icons.mic : Icons.mic_none, size: 12, color: _isListening ? const Color(0xFF0F766E) : const Color(0xFF64748B)),
+                      const SizedBox(width: 6),
                       Text(
-                        'VOICE\nDICTATION',
+                        _isListening ? 'LISTENING...' : 'VOICE\nDICTATION',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 9,
-                          color: Color(0xFF475569),
+                          color: _isListening ? const Color(0xFF0F766E) : const Color(0xFF475569),
                           height: 1.2,
                           letterSpacing: 0.5,
                         ),
@@ -701,6 +732,7 @@ class _FeedbackFormScreenState extends State<FeedbackFormScreen> {
           Stack(
             children: [
               TextField(
+                controller: _commentController,
                 maxLines: 4,
                 onChanged: (val) => _comment = val,
                 style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),

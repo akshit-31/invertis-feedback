@@ -63,7 +63,7 @@ class _AppDrawerState extends State<AppDrawer> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final user = data['user'] ?? {};
-        final pic = user['profile_pic'] ?? user['profile_pic_url'] ?? user['url'];
+        final pic = user['profile_photo'] ?? user['profile_pic'] ?? user['profile_pic_url'] ?? user['url'];
         if (pic != null && pic.toString().isNotEmpty) {
           setState(() {
             _profilePicUrl = pic.toString();
@@ -218,11 +218,14 @@ class _AppDrawerState extends State<AppDrawer> {
                     CircleAvatar(
                       backgroundColor: primaryNavy,
                       radius: 14,
-                      child: const Icon(
-                        Icons.person_outline,
-                        color: Colors.white,
-                        size: 16,
-                      ),
+                      backgroundImage: currentProfileImage,
+                      child: currentProfileImage == null 
+                          ? const Icon(
+                              Icons.person_outline,
+                              color: Colors.white,
+                              size: 16,
+                            )
+                          : null,
                     ),
                     const SizedBox(width: 12),
                     Text(

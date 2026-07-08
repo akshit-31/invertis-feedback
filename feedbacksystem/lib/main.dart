@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'screens/auth/login_screen.dart';
 
 void main() {
@@ -24,7 +25,8 @@ class MyApp extends StatelessWidget {
           primary: primaryNavy,
           secondary: accentRed,
         ),
-        fontFamily: 'Roboto',
+        textTheme: GoogleFonts.montserratTextTheme(),
+        fontFamily: GoogleFonts.montserrat().fontFamily,
       ),
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
